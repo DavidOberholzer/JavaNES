@@ -6,6 +6,20 @@ public class StatusRegister {
     public StatusRegister() {
     }
 
+    public int getStatusByte() {
+        return ((this.getN() << 7) | (this.getV() << 6) | (this.getB() << 4) | (this.getD() << 3) | (this.getI() << 2) | (this.getZ() << 1) | this.getC());
+    }
+
+    public void loadStatusByte(int value) {
+        this.setN((short) ((value >> 7) & 0x01));
+        this.setV((short) ((value >> 6) & 0x01));
+        this.setB((short) ((value >> 4) & 0x01));
+        this.setD((short) ((value >> 3) & 0x01));
+        this.setI((short) ((value >> 2) & 0x01));
+        this.setZ((short) ((value >> 1) & 0x01));
+        this.setC((short) (value & 0x01));
+    }
+
     public short getN() {
         return N;
     }

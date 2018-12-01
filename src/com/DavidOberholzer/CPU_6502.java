@@ -2,15 +2,17 @@ package com.DavidOberholzer;
 
 public class CPU_6502 {
     private StatusRegister Status;
-    private int A, X, Y;
+    private int A, X, Y, SP;
     private int zeroPage[] = new int[256];
-    private int memoryMap[] = new int[65280];
+    private int stack[] = new int[256];
+    private int memoryMap[] = new int[65536];
 
     public CPU_6502() {
         Status = new StatusRegister();
         A = 0x00;
         X = 0x00;
         Y = 0x00;
+        SP = 0xFF;
         zeroPage[0x7D] = 0x76;
     }
 
@@ -23,35 +25,35 @@ public class CPU_6502 {
             // ADD WITH CARRY (ADC)
             // ADC Immediate
             case 0x69:
-                this.addToA(value);
+                this.addToA(value + Status.getC());
                 break;
             // ADC Zero Page
             case 0x65:
-                this.addToA(this.zeroPageAtIndex(value));
+                this.addToA(this.zeroPageAtIndex(value) + Status.getC());
                 break;
             // ADC Zero Page,X
             case 0x75:
-                this.addToA(this.zeroPageAtIndexX(value));
+                this.addToA(this.zeroPageAtIndexX(value) + Status.getC());
                 break;
             // ADC Absolute
             case 0x6D:
-                this.addToA(memoryMap[value]);
+                this.addToA(memoryMap[value] + Status.getC());
                 break;
             // ADC Absolute,X
             case 0x7D:
-                this.addToA(memoryMap[value + X]);
+                this.addToA(memoryMap[value + X] + Status.getC());
                 break;
             // ADC Absolute,Y
             case 0x79:
-                this.addToA(memoryMap[value + Y]);
+                this.addToA(memoryMap[value + Y] + Status.getC());
                 break;
             // ADC Indirect,X
             case 0x61:
-                this.addToA(this.indirectX(value));
+                this.addToA(this.indirectX(value) + Status.getC());
                 break;
             // ADC Indirect,Y
             case 0x71:
-                this.addToA(this.indirectY(value));
+                this.addToA(this.indirectY(value) + Status.getC());
                 break;
 
             // BITWISE AND WITH ACCUMULATOR (AND)
@@ -99,7 +101,7 @@ public class CPU_6502 {
                 break;
             // ASL Zero Page,X
             case 0x16:
-                this.zeroPageShiftLeft(1, this.zeroPageIndexX(value));
+                this.zeroPageShiftLeft(1, this.zeroPageIndexRegister(value, X));
                 break;
             // ASL Absolute
             case 0x0E:
@@ -235,7 +237,7 @@ public class CPU_6502 {
                 break;
             // DEC Zero Page,X
             case 0xD6:
-                this.addToMemory(this.zeroPageIndex(value), zeroPage, -1);
+                this.addToMemory(this.zeroPageIndexRegister(value, X), zeroPage, -1);
                 break;
             // DEC Absolute
             case 0xCE:
@@ -249,35 +251,35 @@ public class CPU_6502 {
             // BITWISE EXCLUSIVE OR (EOR)
             // EOR Immediate
             case 0x49:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(value);
                 break;
             // EOR Zero Page
             case 0x45:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(this.zeroPageAtIndex(value));
                 break;
             // EOR Zero Page,X
             case 0x55:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(this.zeroPageAtIndexX(value));
                 break;
             // EOR Absolute
             case 0x4D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(memoryMap[value]);
                 break;
             // EOR Absolute,X
             case 0x5D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(memoryMap[value + X]);
                 break;
             // EOR Absolute,Y
             case 0x59:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(memoryMap[value + Y]);
                 break;
             // EOR Indirect,X
             case 0x41:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(this.indirectX(value));
                 break;
             // EOR Indirect,Y
             case 0x51:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                bitwiseXOrWithA(this.indirectY(value));
                 break;
 
             // FLAG Instructions
@@ -291,11 +293,11 @@ public class CPU_6502 {
                 break;
             // CLear Interrupt (CLI)
             case 0x58:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                Status.setI((short) 0);
                 break;
             // SEt Interrupt (SEI)
             case 0x78:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                Status.setI((short) 1);
                 break;
             // CLear oVerflow (CLV)
             case 0xB8:
@@ -313,30 +315,28 @@ public class CPU_6502 {
             // INCREMENT MEMORY (INC)
             // INC Zero Page
             case 0xE6:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToMemory(this.zeroPageIndex(value), zeroPage, 1);
                 break;
-            // ADC Zero Page,X
+            // INC Zero Page,X
             case 0xF6:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToMemory(this.zeroPageIndexRegister(value, X), zeroPage, 1);
                 break;
-            // ADC Absolute
+            // INC Absolute
             case 0xEE:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToMemory(value, memoryMap, 1);
                 break;
-            // ADC Absolute,X
+            // INC Absolute,X
             case 0xFE:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToMemory(value + X, memoryMap, 1);
                 break;
 
             // JUMP (JMP)
             // JMP Absolute
             case 0x4C:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
-                break;
+                return value;
             // JMP Indirect
             case 0x6C:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
-                break;
+                return memoryMap[value];
 
             // JUMP TO SUBROUTINE (JSR)
             case 0x20:
@@ -346,101 +346,101 @@ public class CPU_6502 {
             // LOAD ACCUMULATOR (LDA)
             // LDA Immediate
             case 0xA9:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(value);
                 break;
             // LDA Zero Page
             case 0xA5:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(this.zeroPageAtIndex(value));
                 break;
             // LDA Zero Page,X
             case 0xB5:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(this.zeroPageAtIndexX(value));
                 break;
             // LDA Absolute
             case 0xAD:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(memoryMap[value]);
                 break;
             // LDA Absolute,X
             case 0xBD:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(memoryMap[value + X]);
                 break;
             // LDA Absolute,Y
             case 0xB9:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(memoryMap[value + Y]);
                 break;
             // LDA Indirect,X
             case 0xA1:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(indirectX(value));
                 break;
             // LDA Indirect,Y
             case 0xB1:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadA(indirectY(value));
                 break;
 
             // LOAD X REGISTER (LDX)
             // LDX Immediate
             case 0xA2:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadX(value);
                 break;
             // LDX Zero Page
             case 0xA6:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadX(this.zeroPageAtIndex(value));
                 break;
             // LDX Zero Page,Y
             case 0xB6:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadX(this.zeroPageAtIndexY(value));
                 break;
             // LDX Absolute
             case 0xAE:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadX(memoryMap[value]);
                 break;
             // LDX Absolute,Y
             case 0xBE:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadX(memoryMap[value + Y]);
                 break;
 
             // LOAD Y REGISTER (LDY)
             // LDY Immediate
             case 0xA0:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadY(value);
                 break;
             // LDY Zero Page
             case 0xA4:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadY(this.zeroPageAtIndex(value));
                 break;
             // LDY Zero Page,X
             case 0xB4:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadY(this.zeroPageAtIndexX(value));
                 break;
             // LDY Absolute
             case 0xAC:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadY(memoryMap[value]);
                 break;
             // LDY Absolute,X
             case 0xBC:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.loadY(memoryMap[value + X]);
                 break;
 
             // LOGICAL SHIFT RIGHT (LSR)
-            // LSR Immediate
+            // LSR Accumulator
             case 0x4A:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                A = this.logicalShiftRight(A);
                 break;
             // LSR Zero Page
             case 0x46:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(zeroPage, this.zeroPageIndex(value));
                 break;
             // LSR Zero Page,X
             case 0x56:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(zeroPage, this.zeroPageIndexRegister(value, X));
                 break;
             // LSR Absolute
             case 0x4E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(memoryMap, value);
                 break;
             // LSR Absolute,X
             case 0x5E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(memoryMap, value + X);
                 break;
 
             // NO OPERATION (NOP)
@@ -450,114 +450,118 @@ public class CPU_6502 {
             // BITWISE OR WITH ACCUMULATOR (ORA)
             // ORA Immediate
             case 0x09:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(value);
                 break;
             // ORA Zero Page
             case 0x05:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(this.zeroPageAtIndex(value));
                 break;
             // ORA Zero Page,X
             case 0x15:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(this.zeroPageAtIndexX(value));
                 break;
             // ORA Absolute
             case 0x0D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(memoryMap[value]);
                 break;
             // ORA Absolute,X
             case 0x1D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(memoryMap[value + X]);
                 break;
             // ORA Absolute,Y
             case 0x19:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(memoryMap[value + Y]);
                 break;
             // ORA Indirect,X
             case 0x01:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(this.indirectX(value));
                 break;
             // ORA Indirect,Y
             case 0x11:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.bitwiseOrWithA(this.indirectY(value));
                 break;
 
             // REGISTER INSTRUCTIONS
             // Transfer A to X (TAX)
             case 0xAA:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(A);
+                X = A;
                 break;
             // Transfer X to A (TXA)
             case 0x8A:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(X);
+                A = X;
                 break;
             // DEcrement X (DEX)
             case 0xCA:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToX(-1);
                 break;
             // INcrement X (INX)
             case 0xE8:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToX(1);
                 break;
             // Transfer A to Y (TAY)
             case 0xA8:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(A);
+                Y = A;
                 break;
             // Transfer Y to A (TYA)
             case 0x98:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(Y);
+                A = Y;
                 break;
             // DEcrement Y (DEY)
             case 0x88:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToY(-1);
                 break;
             // INcrement Y (INY)
             case 0xC8:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToY(1);
                 break;
 
             // ROTATE LEFT (ROL)
             // ROL Accumulator
             case 0x2A:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                A = this.logicalShiftLeft(A);
                 break;
             // ROL Zero Page
             case 0x26:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftLeftRegister(zeroPage, this.zeroPageIndex(value));
                 break;
             // ROL Zero Page,X
             case 0x36:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftLeftRegister(zeroPage, this.zeroPageIndexRegister(value, X));
                 break;
             // ROL Absolute
             case 0x2E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftLeftRegister(memoryMap, value);
                 break;
             // ROL Absolute,X
             case 0x3E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftLeftRegister(memoryMap, value + X);
                 break;
 
 
             // ROTATE RIGHT (ROR)
             // ROR Accumulator
             case 0x6A:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                A = this.logicalShiftRight(value);
                 break;
             // ROR Zero Page
             case 0x66:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(zeroPage, this.zeroPageIndex(value));
                 break;
             // ROR Zero Page,X
             case 0x76:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(zeroPage, this.zeroPageIndexRegister(value, X));
                 break;
             // ROR Absolute
             case 0x6E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(memoryMap, value);
                 break;
             // ROR Absolute,X
             case 0x7E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.logicalShiftRightRegister(memoryMap, value + X);
                 break;
 
             // RETURN FROM INTERRUPT (RTI)
@@ -573,119 +577,125 @@ public class CPU_6502 {
             // SUBTRACT WITH CARRY (SBC)
             // SBC Immediate
             case 0xE9:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-value - Status.getC());
                 break;
             // SBC Zero Page
             case 0xE5:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-this.zeroPageAtIndex(value) - Status.getC());
                 break;
             // SBC Zero Page,X
             case 0xF5:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-this.zeroPageAtIndexX(value) - Status.getC());
                 break;
             // SBC Absolute
             case 0xED:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-memoryMap[value] - Status.getC());
                 break;
             // SBC Absolute,X
             case 0xFD:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-memoryMap[value + X] - Status.getC());
                 break;
             // SBC Absolute,Y
             case 0xF9:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-memoryMap[value + Y] - Status.getC());
                 break;
             // SBC Indirect,X
             case 0xE1:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-this.indirectX(value) - Status.getC());
                 break;
             // SBC Indirect,Y
             case 0xF1:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.addToA(-this.indirectY(value) - Status.getC());
                 break;
 
             // STORE ACCUMULATOR (STA)
             // STA Zero Page
             case 0x85:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndex(value)] = A;
                 break;
             // STA Zero Page,X
             case 0x95:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndexRegister(value, X)] = A;
                 break;
             // STA Absolute
             case 0x8D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[value] = A;
                 break;
             // STA Absolute,X
             case 0x9D:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[value + X] = A;
                 break;
             // STA Absolute,Y
             case 0x99:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[value + Y] = A;
                 break;
             // STA Indirect,X
             case 0x81:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[this.indirectXIndex(value)] = A;
                 break;
             // STA Indirect,Y
             case 0x91:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[this.indirectYIndex(value)] = A;
                 break;
 
             // STACK INSTRUCTIONS
             // Transfer X to Stack ptr (TXS)
             case 0x9A:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                SP = X;
                 break;
             // Transfer Stack ptr to X (TSX)
             case 0xBA:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(SP);
+                X = SP;
                 break;
             // PusH Accumulator (PHA)
             case 0x48:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                stack[SP] = A;
+                this.addToSP(-1);
                 break;
             // PuLl Accumulator (PLA)
             case 0x68:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                this.transferFlags(stack[SP]);
+                A = stack[SP];
+                this.addToSP(1);
                 break;
             // PusH Processor status (PHP)
             case 0x08:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                stack[SP] = Status.getStatusByte();
+                this.addToSP(-1);
                 break;
             // PuLl Processor status (PLP)
             case 0x28:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                Status.loadStatusByte(stack[SP]);
+                this.addToSP(1);
                 break;
 
             // STORE X REGISTER (STX)
             // STX Zero Page
             case 0x86:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndex(value)] = X;
                 break;
             // STX Zero Page,Y
             case 0x96:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndexRegister(value, Y)] = X;
                 break;
             // STX Absolute
             case 0x8E:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[value] = X;
                 break;
 
             // STORE Y REGISTER (STY)
             // STY Zero Page
             case 0x84:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndex(value)] = Y;
                 break;
             // STY Zero Page,X
             case 0x94:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                zeroPage[this.zeroPageIndexRegister(value, X)] = Y;
                 break;
             // STY Absolute
             case 0x8C:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
+                memoryMap[value] = Y;
                 break;
 
             default:
@@ -740,18 +750,22 @@ public class CPU_6502 {
     }
 
     private int zeroPageAtIndexX(int value) {
-        return zeroPage[zeroPageIndexX(value)];
+        return zeroPage[zeroPageIndexRegister(value, X)];
     }
 
-    private int zeroPageIndexX(int value) {
-        int index = value + X;
+    private int zeroPageAtIndexY(int value) {
+        return zeroPage[zeroPageIndexRegister(value, Y)];
+    }
+
+    private int zeroPageIndexRegister(int value, int m_index) {
+        int index = value + m_index;
         while (index > 0xFF) {
             index -= (0xFF + 1);
         }
         return index;
     }
 
-    private int indirectX(int value) {
+    private int indirectXIndex(int value) {
         int index_1 = value + X;
         if (index_1 > 0xFF) {
             index_1 -= (0xFF + 1);
@@ -760,16 +774,24 @@ public class CPU_6502 {
         if (index_2 > 0xFF) {
             index_2 -= (0xFF + 1);
         }
-        return memoryMap[zeroPage[index_2] * 256 + zeroPage[index_1]];
+        return zeroPage[index_2] * 256 + zeroPage[index_1];
     }
 
-    private int indirectY(int value) {
+    private int indirectX(int value) {
+        return memoryMap[this.indirectXIndex(value)];
+    }
+
+    private int indirectYIndex(int value) {
         if (value > 0xFF)
             value -= (0xFF + 1);
         int value_2 = value + 1;
         if (value_2 > 0xFF)
             value_2 -= (0xFF + 1);
-        return memoryMap[zeroPage[value_2] * 256 + zeroPage[value] + Y];
+        return zeroPage[value_2] * 256 + zeroPage[value] + Y;
+    }
+
+    private int indirectY(int value) {
+        return memoryMap[this.indirectYIndex(value)];
     }
 
     private void addToA(int value) {
@@ -783,7 +805,7 @@ public class CPU_6502 {
             value += (0xFF + 1);
         }
         checkIfZero(value);
-        Status.setN((short) (value >> 7));
+        checkIfNegative(value);
         A = value;
     }
 
@@ -796,7 +818,7 @@ public class CPU_6502 {
             value += (0xFF + 1);
         }
         checkIfZero(value);
-        Status.setN((short) (value >> 7));
+        checkIfNegative(value);
         memory[index] = value;
     }
 
@@ -809,19 +831,77 @@ public class CPU_6502 {
         checkIfZero(value);
     }
 
+    private void bitwiseOrWithA(int value) {
+        value = A | value;
+        checkIfZero(value);
+        checkIfNegative(value);
+        A = value;
+    }
+
+    private void bitwiseXOrWithA(int value) {
+        value = A ^ value;
+        checkIfZero(value);
+        checkIfNegative(value);
+        A = value;
+    }
+
     private void bitwiseAndWithA(int value) {
         value = A & value;
         checkIfZero(value);
-        Status.setN((short) (value >> 7));
+        checkIfNegative(value);
         A = value;
     }
 
     private void shiftALeft(int shiftAmount) {
         int value = A << shiftAmount;
-        Status.setN((short) (value >> 7));
+        checkIfNegative(value);
         checkIfZero(value);
         checkIfCarry(value);
         A = A & 0xFF;
+    }
+
+    private int logicalShiftLeft(int value) {
+        int bit_7 = (value & 0x80) >> 7;
+        Status.setC((short) bit_7);
+        value = (value << 1) | (bit_7);
+        checkIfZero(value);
+        checkIfNegative(value);
+        return value;
+    }
+
+    private void logicalShiftLeftRegister(int[] register, int index) {
+        register[index] = this.logicalShiftLeft(register[index]);
+    }
+
+    private int logicalShiftRight(int value) {
+        int bit_0 = value & 0x01;
+        Status.setC((short) bit_0);
+        value = (value >> 1) | (bit_0 << 7);
+        checkIfZero(value);
+        checkIfNegative(value);
+        return value;
+    }
+
+    private void logicalShiftRightRegister(int[] register, int index) {
+        register[index] = this.logicalShiftRight(register[index]);
+    }
+
+    private void loadA(int value) {
+        checkIfZero(value);
+        checkIfNegative(value);
+        A = value;
+    }
+
+    private void loadX(int value) {
+        checkIfZero(value);
+        checkIfNegative(value);
+        X = value;
+    }
+
+    private void loadY(int value) {
+        checkIfZero(value);
+        checkIfNegative(value);
+        Y = value;
     }
 
     private void addToX(int value) {
@@ -832,6 +912,8 @@ public class CPU_6502 {
         while (value < 0x00) {
             value += (0xFF + 1);
         }
+        checkIfZero(value);
+        checkIfNegative(value);
         X = value;
     }
 
@@ -843,7 +925,26 @@ public class CPU_6502 {
         while (value < 0x00) {
             value += (0xFF + 1);
         }
+        checkIfZero(value);
+        checkIfNegative(value);
         Y = value;
+    }
+
+    private void addToSP(int value) {
+        value = Y + value;
+        if (value > 0xFF) {
+            value = 0xff;
+        }
+        if (value < 0x00) {
+            System.out.println("Stack overflow!");
+            System.exit(-1);
+        }
+        SP = value;
+    }
+
+    private void transferFlags(int value) {
+        checkIfZero(value);
+        checkIfNegative(value);
     }
 
     private void checkIfCarry(int value) {
@@ -869,6 +970,11 @@ public class CPU_6502 {
         } else {
             Status.setZ((short) 0);
         }
+    }
+
+    private void checkIfNegative(int value) {
+        value = 0x01 & (value >> 7);
+        Status.setN((short) value);
     }
 
     public int getA() {
