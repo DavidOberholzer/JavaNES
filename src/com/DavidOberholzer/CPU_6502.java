@@ -2,7 +2,7 @@ package com.DavidOberholzer;
 
 public class CPU_6502 {
     private StatusRegister Status;
-    private int A, X, Y, SP;
+    private int A, X, Y, SP, PC;
     private int zeroPage[] = new int[256];
     private int stack[] = new int[256];
     private int memoryMap[] = new int[65536];
@@ -16,11 +16,68 @@ public class CPU_6502 {
         zeroPage[0x7D] = 0x76;
     }
 
-    public int runOpCode(int opCode, int value, int currentInstruction) {
-        if (opCode > 0xFF) {
-            System.out.println("INVALID OPCODE, OUT OF BOUNDS! EXITING...");
-            return -1;
-        }
+    public void loadMemory(int location, int value) {
+        memoryMap[location] = value;
+    }
+
+    public void NMIAddress() {
+        PC = this.getAddress(0xFFFA, 0xFFFB);
+    }
+
+    public void resetAddress() {
+        PC = this.getAddress(0xFFFC, 0xFFFD);
+    }
+
+    public void IRQAddress() {
+        PC = this.getAddress(0xFFFE, 0xFFFF);
+    }
+
+    public int getAddress(int little_endian, int big_endian) {
+        int part_1 = memoryMap[little_endian];
+        int part_2 = memoryMap[big_endian];
+        return part_1 * 256 + part_2;
+    }
+
+    public void loadNMIAddress(int address) {
+        this.loadAddress(0xFFFA, 0xFFFB, address);
+    }
+
+    public void loadResetAddress(int address) {
+        this.loadAddress(0xFFFC, 0xFFFD, address);
+    }
+
+    public void loadIRQAddress(int address) {
+        this.loadAddress(0xFFFE, 0xFFFF, address);
+    }
+
+    public void loadAddress(int little_endian, int big_endian, int address) {
+        int part_1 = address / 256;
+        int part_2 = address - part_1;
+        this.loadMemory(little_endian, part_1);
+        this.loadMemory(big_endian, part_2);
+    }
+
+    public void NMIInterrupt() {
+        int part_1 = PC / 256;
+        int part_2 = PC - part_1 * 256;
+        stack[SP] = part_1;
+        this.addToSP(-1);
+        stack[SP] = part_2;
+        this.addToSP(-1);
+        this.NMIAddress();
+    }
+
+    public void IRQInterrupt() {
+        int part_1 = PC / 256;
+        int part_2 = PC - part_1 * 256;
+        stack[SP] = part_1;
+        this.addToSP(-1);
+        stack[SP] = part_2;
+        this.addToSP(-1);
+        this.IRQAddress();
+    }
+
+    public void runOpCode(int opCode, int value) {
         switch (opCode) {
             // ADD WITH CARRY (ADC)
             // ADC Immediate
@@ -126,47 +183,54 @@ public class CPU_6502 {
             // Branch on PLus (BPL)
             case 0x10:
                 if (Status.getN() == 0)
-                    return value;
+                    PC = value;
                 break;
             // Branch on MInus
             case 0x30:
                 if (Status.getN() == 1)
-                    return value;
+                    PC = value;
                 break;
             // Branch on oVerflow Clear (BVC)
             case 0x50:
                 if (Status.getV() == 0)
-                    return value;
+                    PC = value;
                 break;
             // Branch on oVerflow Set (BVS)
             case 0x70:
                 if (Status.getV() == 1)
-                    return value;
+                    PC = value;
                 break;
             // Branch on Carry Clear (BCC)
             case 0x90:
                 if (Status.getC() == 0)
-                    return value;
+                    PC = value;
                 break;
             // Branch on Carry Set (BCS)
             case 0xB0:
                 if (Status.getC() == 1)
-                    return value;
+                    PC = value;
                 break;
             // Branch on Not Equal (BNE)
             case 0xD0:
                 if (Status.getZ() == 0)
-                    return value;
+                    PC = value;
                 break;
             // Branch on EQual (BEQ)
             case 0xF0:
                 if (Status.getZ() == 1)
-                    return value;
+                    PC = value;
                 break;
 
             // BReaK (BRK)
             case 0x00:
-                return 2;
+                Status.setB((short) 0x01);
+                int current_2 = PC / 256;
+                int current_1 = PC - current_2 * 256;
+                stack[SP] = current_2;
+                this.addToSP(-1);
+                stack[SP] = current_1;
+                this.addToSP(-1);
+                this.IRQAddress();
 
             // COMPARE ACCUMULATOR (CMP)
             // CMP Immediate
@@ -333,15 +397,21 @@ public class CPU_6502 {
             // JUMP (JMP)
             // JMP Absolute
             case 0x4C:
-                return value;
+                PC = value;
             // JMP Indirect
             case 0x6C:
-                return memoryMap[value];
+                PC = memoryMap[value];
 
             // JUMP TO SUBROUTINE (JSR)
             case 0x20:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
-                break;
+                int lastInstruction = PC - 1;
+                int value_1 = (lastInstruction & 0xFF00 >> 8);
+                int value_2 = lastInstruction & 0x00FF;
+                stack[SP] = value_1;
+                this.addToSP(-1);
+                stack[SP] = value_2;
+                this.addToSP(-1);
+                PC = value;
 
             // LOAD ACCUMULATOR (LDA)
             // LDA Immediate
@@ -566,13 +636,19 @@ public class CPU_6502 {
 
             // RETURN FROM INTERRUPT (RTI)
             case 0x40:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
-                break;
+                int flags = stack[SP + 1];
+                int return_address_1 = stack[SP + 2];
+                int return_address_2 = stack[SP + 3];
+                this.addToSP(3);
+                Status.loadStatusByte(flags);
+                PC = return_address_2 * 256 + return_address_1;
 
             // RETURN FROM SUBROUTINE (RTS)
             case 0x60:
-                System.out.println("Opcode: " + opCode + " Not Implemented");
-                break;
+                int address_1 = stack[SP + 1];
+                int address_2 = stack[SP + 2];
+                this.addToSP(2);
+                PC = address_2 * 256 + address_1 + 1;
 
             // SUBTRACT WITH CARRY (SBC)
             // SBC Immediate
@@ -655,8 +731,8 @@ public class CPU_6502 {
                 break;
             // PuLl Accumulator (PLA)
             case 0x68:
-                this.transferFlags(stack[SP]);
-                A = stack[SP];
+                this.transferFlags(stack[SP + 1]);
+                A = stack[SP + 1];
                 this.addToSP(1);
                 break;
             // PusH Processor status (PHP)
@@ -666,7 +742,7 @@ public class CPU_6502 {
                 break;
             // PuLl Processor status (PLP)
             case 0x28:
-                Status.loadStatusByte(stack[SP]);
+                Status.loadStatusByte(stack[SP + 1]);
                 this.addToSP(1);
                 break;
 
@@ -700,9 +776,9 @@ public class CPU_6502 {
 
             default:
                 System.out.println("INVALID OPCODE, NOT SUPPORTED! EXITING...");
-                return -1;
+                System.exit(1);
         }
-        return ++currentInstruction;
+        PC++;
     }
 
     private void compareWithRegister(int value, int register) {
@@ -979,22 +1055,6 @@ public class CPU_6502 {
 
     public int getA() {
         int value = A;
-        if (value > 0x7F) {
-            value -= 0x100;
-        }
-        return value;
-    }
-
-    public int getX() {
-        int value = X;
-        if (value > 0x7F) {
-            value -= 0x100;
-        }
-        return value;
-    }
-
-    public int getY() {
-        int value = Y;
         if (value > 0x7F) {
             value -= 0x100;
         }
